@@ -17,11 +17,31 @@ import net.minecraftforge.fml.ModLoadingContext;
 public class FixWaterWheelConfigScreen extends Screen {
 
     private final Screen parent;
-    private static final int ROW_HEIGHT = 24;
-    private static final int ROW_GAP = 4;
+
+    private static final int WIDGET_HEIGHT = 20;
+    private static final int WIDGET_GAP = 5;
+    private static final int BUTTON_WIDTH = 200;
+
+    private static final Component TITLE = Component.translatable("fixwaterwheel.config.title");
+    private static final Component SECTION_CLIENT = Component.translatable("fixwaterwheel.config.section.client");
+    private static final Component SECTION_SERVER = Component.translatable("fixwaterwheel.config.section.server");
+    private static final Component OPT_FIXED_LIGHTING = Component.translatable("fixwaterwheel.config.option.fixed_lighting");
+    private static final Component OPT_DISABLE_ROTATION = Component.translatable("fixwaterwheel.config.option.disable_rotation");
+    private static final Component OPT_REMOVE_BLADES = Component.translatable("fixwaterwheel.config.option.remove_blades");
+    private static final Component OPT_TICK_INTERVAL = Component.translatable("fixwaterwheel.config.option.tick_interval");
+    private static final Component HINT_TICK_INTERVAL = Component.translatable("fixwaterwheel.config.hint.tick_interval");
+    private static final Component HINT_SERVER_UNAVAILABLE = Component.translatable("fixwaterwheel.config.hint.server_unavailable");
+    private static final Component HINT_MENU = Component.translatable("fixwaterwheel.config.hint.menu");
+    private static final Component ERROR_RANGE = Component.translatable("fixwaterwheel.config.error.range");
+
+    private int clientSectionY;
+    private int serverSectionY;
+    private int inputLabelY;
+    private int inputY;
+    private int warningY;
 
     public FixWaterWheelConfigScreen(Screen parent) {
-        super(Component.literal("Fix Water Wheel 配置"));
+        super(TITLE);
         this.parent = parent;
     }
 
@@ -34,97 +54,130 @@ public class FixWaterWheelConfigScreen extends Screen {
         );
     }
 
-    @Override
-    protected void init() {
-        int centerX = this.width / 2;
-        int y = this.height / 4;
-        int buttonWidth = 200;
-
-        // ========== 客户端配置区域 ==========
-        y += 20;
-
-        addRenderableWidget(CycleButton
-                .onOffBuilder(FixWaterWheelConfig.CLIENT.fixedLighting.get())
-                .create(centerX - buttonWidth / 2, y, buttonWidth, 20,
-                        Component.literal("固定光照 (客户端)"),
-                        (btn, value) -> FixWaterWheelConfig.CLIENT.fixedLighting.set(value)));
-        y += ROW_HEIGHT + ROW_GAP;
-
-        addRenderableWidget(CycleButton
-                .onOffBuilder(FixWaterWheelConfig.CLIENT.disableRotation.get())
-                .create(centerX - buttonWidth / 2, y, buttonWidth, 20,
-                        Component.literal("剔除扇叶旋转 (客户端)"),
-                        (btn, value) -> FixWaterWheelConfig.CLIENT.disableRotation.set(value)));
-        y += ROW_HEIGHT + ROW_GAP;
-
-        addRenderableWidget(CycleButton
-                .onOffBuilder(FixWaterWheelConfig.CLIENT.removeBlades.get())
-                .create(centerX - buttonWidth / 2, y, buttonWidth, 20,
-                        Component.literal("完全剔除扇叶 (客户端)"),
-                        (btn, value) -> FixWaterWheelConfig.CLIENT.removeBlades.set(value)));
-        y += ROW_HEIGHT + ROW_GAP * 3;
-
-        // ========== 服务端配置区域 ==========
-        y += 20;
-
-        // 创建输入框
-        EditBox intervalBox = new EditBox(this.font, centerX - buttonWidth / 2, y, buttonWidth, 20, Component.literal("间隔刻数"));
-        intervalBox.setValue(String.valueOf(FixWaterWheelConfig.SERVER.waterWheelTickInterval.get()));
-        intervalBox.setHint(Component.literal("输入 20-600 之间的刻数"));
-        // 限制只能输入数字
-        intervalBox.setFilter(text -> text.matches("\\d*"));
-        addRenderableWidget(intervalBox);
-
-        // 完成按钮，负责读取输入框并应用配置
-        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, btn -> {
-            try {
-                int val = Integer.parseInt(intervalBox.getValue());
-                if (val >= 20 && val <= 600) {
-                    if (FixWaterWheelConfig.SERVER_SPEC.isLoaded()) {
-                        // 在单人游戏或集成服务器中，配置已加载，可以安全设置
-                        FixWaterWheelConfig.SERVER.waterWheelTickInterval.set(val);
-                    } else {
-                        // 在多人游戏客户端中，服务端配置未加载，无法直接修改
-                        if (this.minecraft != null && this.minecraft.player != null) {
-                            this.minecraft.player.displayClientMessage(
-                                    Component.literal("§c无法修改服务器配置：当前不在单人游戏中或服务器未同步配置！"), false);
-                        }
-                    }
-                } else {
-                    if (this.minecraft != null && this.minecraft.player != null) {
-                        this.minecraft.player.displayClientMessage(
-                                Component.literal("§c间隔刻数必须在 20 到 600 之间！"), false);
-                    }
-                }
-            } catch (NumberFormatException ignored) {
-                // 输入框为空或非数字时忽略
-            }
-            this.minecraft.setScreen(this.parent);
-        }).pos(centerX - 60, this.height - 40).width(120).build());
+    /**
+     * 判断服务端配置是否可用。返回 null 表示可用；否则返回需要显示的提示文本。
+     * 注意：这只影响“服务端配置”区域，不影响客户端配置的保存。
+     */
+    private static Component getServerUnavailableMessage() {
+        if (FixWaterWheelConfig.SERVER_SPEC.isLoaded()) {
+            return null;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return HINT_MENU;
+        }
+        if (mc.hasSingleplayerServer()) {
+            return null;
+        }
+        return HINT_SERVER_UNAVAILABLE;
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
+    protected void init() {
+        int centerX = this.width / 2;
+        int left = centerX - BUTTON_WIDTH / 2;
+        int y = 30;
+
+        // ========== 客户端配置区域 ==========
+        this.clientSectionY = y;
+        y += 14;
+
+        addRenderableWidget(CycleButton
+                .onOffBuilder(FixWaterWheelConfig.CLIENT.fixedLighting.get())
+                .create(left, y, BUTTON_WIDTH, WIDGET_HEIGHT, OPT_FIXED_LIGHTING,
+                        (btn, value) -> FixWaterWheelConfig.CLIENT.fixedLighting.set(value)));
+        y += WIDGET_HEIGHT + WIDGET_GAP;
+
+        addRenderableWidget(CycleButton
+                .onOffBuilder(FixWaterWheelConfig.CLIENT.disableRotation.get())
+                .create(left, y, BUTTON_WIDTH, WIDGET_HEIGHT, OPT_DISABLE_ROTATION,
+                        (btn, value) -> FixWaterWheelConfig.CLIENT.disableRotation.set(value)));
+        y += WIDGET_HEIGHT + WIDGET_GAP;
+
+        addRenderableWidget(CycleButton
+                .onOffBuilder(FixWaterWheelConfig.CLIENT.removeBlades.get())
+                .create(left, y, BUTTON_WIDTH, WIDGET_HEIGHT, OPT_REMOVE_BLADES,
+                        (btn, value) -> FixWaterWheelConfig.CLIENT.removeBlades.set(value)));
+        y += WIDGET_HEIGHT + 20;  // 客户端区域结束，留出间隔
+
+        // ========== 服务端配置区域 ==========
+        this.serverSectionY = y;
+        y += 14;
+
+        this.inputLabelY = y;
+        y += 12;
+
+        this.inputY = y;
+        Component unavailableMsg = getServerUnavailableMessage();
+        boolean unavailable = unavailableMsg != null;
+
+        EditBox intervalBox = new EditBox(this.font, left, y, BUTTON_WIDTH, WIDGET_HEIGHT, OPT_TICK_INTERVAL);
+        if (unavailable) {
+            intervalBox.setValue("60");
+            intervalBox.setHint(HINT_TICK_INTERVAL);
+            intervalBox.setEditable(false);
+            intervalBox.setFilter(text -> false);
+        } else {
+            int current = 60;
+            try {
+                if (FixWaterWheelConfig.SERVER_SPEC.isLoaded()) {
+                    current = FixWaterWheelConfig.SERVER.waterWheelTickInterval.get();
+                }
+            } catch (Exception ignored) {
+            }
+            intervalBox.setValue(String.valueOf(current));
+            intervalBox.setHint(HINT_TICK_INTERVAL);
+            intervalBox.setFilter(text -> text.matches("\\d*"));
+        }
+        addRenderableWidget(intervalBox);
+
+        this.warningY = this.inputY + WIDGET_HEIGHT + 6;
+
+        // ========== 完成按钮固定屏幕底部 ==========
+        int doneY = this.height - 30;
+        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, btn -> {
+            // 客户端配置通过 CycleButton 的 set() 已即时生效，无需额外处理。
+            // 只有当服务端配置可用时，才读取输入框的值并应用。
+            if (FixWaterWheelConfig.SERVER_SPEC.isLoaded()) {
+                try {
+                    int val = Integer.parseInt(intervalBox.getValue());
+                    if (val >= 20 && val <= 600) {
+                        FixWaterWheelConfig.SERVER.waterWheelTickInterval.set(val);
+                    } else if (this.minecraft != null && this.minecraft.player != null) {
+                        this.minecraft.player.displayClientMessage(ERROR_RANGE, false);
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            // 服务端不可用时：静默关闭，不弹任何提示。
+            // 用户可能只是改了客户端配置，改客户端配置与服务器无关。
+            this.minecraft.setScreen(this.parent);
+        }).pos(centerX - 60, doneY).size(120, WIDGET_HEIGHT).build());
+    }
+
+    @Override
+    public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(gg);
+        super.render(gg, mouseX, mouseY, partialTick);
 
         int centerX = this.width / 2;
-        int yStart = this.height / 4;
 
-        // 分区标题
-        guiGraphics.drawString(this.font,
-                "§e===== 客户端配置（仅本地渲染，不影响服务端） =====",
-                centerX - 160, yStart + 10, 0xFFFF55);
-        guiGraphics.drawString(this.font,
-                "§a===== 服务端配置（影响水车实际行为） =====",
-                centerX - 160, yStart + 104, 0x55FF55);
+        // 标题
+        gg.drawCenteredString(this.font, this.title, centerX, 12, 0xFFFFFF);
 
-        // 输入框上方的文字说明
-        guiGraphics.drawString(this.font,
-                "水车流体检查间隔（刻）:",
-                centerX - 100, yStart + 124 - 12, 0xFFFFFF);
+        // 分区标题与按钮左边缘对齐
+        int left = centerX - BUTTON_WIDTH / 2;
+        gg.drawString(this.font, SECTION_CLIENT, left, clientSectionY, 0xFFFF55);
+        gg.drawString(this.font, SECTION_SERVER, left, serverSectionY, 0x55FF55);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        // 输入框标签
+        gg.drawString(this.font, OPT_TICK_INTERVAL, left, inputLabelY, 0xAAAAAA);
+
+        // 服务端不可用时的红色警告
+        Component msg = getServerUnavailableMessage();
+        if (msg != null) {
+            gg.drawString(this.font, msg, left, warningY, 0xFF5555);
+        }
     }
 
     @Override

@@ -6,8 +6,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.ChunkEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.Map;
@@ -16,25 +19,27 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class WaterWheelTickScheduler {
 
-    /**
-     * 每个已加载区块的下一次检查时间。
-     */
     private static final Map<Long, Long> nextCheckTick = new ConcurrentHashMap<>();
-
-    /**
-     * 每个区块的偏移量，用于错开不同区块的检查时间。
-     */
     private static final Map<Long, Integer> chunkOffset = new ConcurrentHashMap<>();
-
-    /**
-     * 记录当前所有已加载的区块。
-     * 通过 ChunkEvent.Load 和 ChunkEvent.Unload 事件来维护。
-     */
     private static final Set<Long> loadedChunks = ConcurrentHashMap.newKeySet();
 
     /**
-     * 监听区块加载事件。
+     * 在逻辑服务端启动时注册事件监听器。
      */
+    public static void onServerStarted(ServerStartedEvent event) {
+        MinecraftForge.EVENT_BUS.register(WaterWheelTickScheduler.class);
+    }
+
+    /**
+     * 在逻辑服务端停止时注销事件监听器并清空缓存。
+     */
+    public static void onServerStopped(ServerStoppedEvent event) {
+        MinecraftForge.EVENT_BUS.unregister(WaterWheelTickScheduler.class);
+        loadedChunks.clear();
+        nextCheckTick.clear();
+        chunkOffset.clear();
+    }
+
     @SubscribeEvent
     public static void onChunkLoad(ChunkEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel) {
@@ -42,9 +47,6 @@ public class WaterWheelTickScheduler {
         }
     }
 
-    /**
-     * 监听区块卸载事件。
-     */
     @SubscribeEvent
     public static void onChunkUnload(ChunkEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel) {
@@ -67,16 +69,13 @@ public class WaterWheelTickScheduler {
 
         for (ServerLevel level : server.getAllLevels()) {
             for (long chunkKey : loadedChunks) {
-                // 计算该区块的下一次检查时间
                 int offset = chunkOffset.computeIfAbsent(chunkKey,
                         k -> Math.abs((int) (k % interval)));
                 long nextTick = nextCheckTick.computeIfAbsent(chunkKey,
                         k -> currentTick + offset);
 
-                // 如果还没到检查时间，跳过
                 if (currentTick < nextTick) continue;
 
-                // 通过区块坐标获取区块
                 ChunkPos chunkPos = new ChunkPos(chunkKey);
                 LevelChunk chunk = level.getChunkSource().getChunkNow(chunkPos.x, chunkPos.z);
 
@@ -88,15 +87,11 @@ public class WaterWheelTickScheduler {
                     }
                 }
 
-                // 安排下一次检查
                 nextCheckTick.put(chunkKey, currentTick + interval);
             }
         }
     }
 
-    /**
-     * 触发水车的流体方向检查。
-     */
     private static void triggerFlowCheck(WaterWheelBlockEntity waterWheel) {
         try {
             var method = WaterWheelBlockEntity.class.getDeclaredMethod("determineAndApplyFlowScore");

@@ -1,0 +1,13 @@
+{
+  "fixwaterwheel.config.title": "Fix Water Wheel Config",
+  "fixwaterwheel.config.section.client": "===== Client Config (local rendering only) =====",
+  "fixwaterwheel.config.section.server": "===== Server Config (affects water wheel behavior) =====",
+  "fixwaterwheel.config.option.fixed_lighting": "Fixed Lighting (Client)",
+  "fixwaterwheel.config.option.disable_rotation": "Disable Blade Rotation (Client)",
+  "fixwaterwheel.config.option.remove_blades": "Remove Blades (Client)",
+  "fixwaterwheel.config.option.tick_interval": "Water Wheel Fluid Check Interval (ticks):",
+  "fixwaterwheel.config.hint.tick_interval": "Enter a value between 20 and 600",
+  "fixwaterwheel.config.hint.server_unavailable": "§cServer does not have this mod installed. Server config unavailable.",
+  "fixwaterwheel.config.hint.menu": "§7Enter a world to modify server config",
+  "fixwaterwheel.config.error.range": "§cInterval must be between 20 and 600!"
+}

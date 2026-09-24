@@ -1,0 +1,13 @@
+{
+  "fixwaterwheel.config.title": "Fix Water Wheel 配置",
+  "fixwaterwheel.config.section.client": "===== 客户端配置（仅本地渲染，不影响服务端） =====",
+  "fixwaterwheel.config.section.server": "===== 服务端配置（影响水车实际行为） =====",
+  "fixwaterwheel.config.option.fixed_lighting": "固定光照 (客户端)",
+  "fixwaterwheel.config.option.disable_rotation": "剔除扇叶旋转 (客户端)",
+  "fixwaterwheel.config.option.remove_blades": "完全剔除扇叶 (客户端)",
+  "fixwaterwheel.config.option.tick_interval": "水车流体检查间隔（刻）:",
+  "fixwaterwheel.config.hint.tick_interval": "输入 20-600 之间的刻数",
+  "fixwaterwheel.config.hint.server_unavailable": "§c服务端未安装本模组，服务端配置不可用",
+  "fixwaterwheel.config.hint.menu": "§7请进入世界后再修改服务端配置",
+  "fixwaterwheel.config.error.range": "§c间隔刻数必须在 20 到 600 之间！"
+}
