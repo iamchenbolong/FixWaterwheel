@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -24,10 +25,6 @@ public class FixWaterWheelConfigScreen extends Screen {
         this.parent = parent;
     }
 
-    /**
-     * 用 Forge 1.20.1 的 registerConfigScreen API 注册配置界面。
-     * 这是 Forge 在 1.20.x 推荐的配置界面注册方式。
-     */
     public static void register() {
         ModLoadingContext.get().registerExtensionPoint(
                 ConfigScreenHandler.ConfigScreenFactory.class,
@@ -70,25 +67,38 @@ public class FixWaterWheelConfigScreen extends Screen {
         // ========== 服务端配置区域 ==========
         y += 20;
 
-        addRenderableWidget(new Button.Builder(
-                Component.literal("流体检查间隔: " + FixWaterWheelConfig.SERVER.waterWheelTickInterval.get() + " 刻"),
-                btn -> {
-                    int current = FixWaterWheelConfig.SERVER.waterWheelTickInterval.get();
-                    int next;
-                    if (current >= 300) next = 20;
-                    else if (current >= 120) next = 600;
-                    else if (current >= 60) next = 300;
-                    else next = 120;
-                    FixWaterWheelConfig.SERVER.waterWheelTickInterval.set(next);
-                    btn.setMessage(Component.literal("流体检查间隔: " + next + " 刻"));
-                })
-                .pos(centerX - buttonWidth / 2, y)
-                .width(buttonWidth)
-                .build());
-        y += ROW_HEIGHT + ROW_GAP;
+        // 创建输入框
+        EditBox intervalBox = new EditBox(this.font, centerX - buttonWidth / 2, y, buttonWidth, 20, Component.literal("间隔刻数"));
+        intervalBox.setValue(String.valueOf(FixWaterWheelConfig.SERVER.waterWheelTickInterval.get()));
+        intervalBox.setHint(Component.literal("输入 20-600 之间的刻数"));
+        // 限制只能输入数字
+        intervalBox.setFilter(text -> text.matches("\\d*"));
+        addRenderableWidget(intervalBox);
 
-        // 完成按钮
+        // 完成按钮，负责读取输入框并应用配置
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, btn -> {
+            try {
+                int val = Integer.parseInt(intervalBox.getValue());
+                if (val >= 20 && val <= 600) {
+                    if (FixWaterWheelConfig.SERVER_SPEC.isLoaded()) {
+                        // 在单人游戏或集成服务器中，配置已加载，可以安全设置
+                        FixWaterWheelConfig.SERVER.waterWheelTickInterval.set(val);
+                    } else {
+                        // 在多人游戏客户端中，服务端配置未加载，无法直接修改
+                        if (this.minecraft != null && this.minecraft.player != null) {
+                            this.minecraft.player.displayClientMessage(
+                                    Component.literal("§c无法修改服务器配置：当前不在单人游戏中或服务器未同步配置！"), false);
+                        }
+                    }
+                } else {
+                    if (this.minecraft != null && this.minecraft.player != null) {
+                        this.minecraft.player.displayClientMessage(
+                                Component.literal("§c间隔刻数必须在 20 到 600 之间！"), false);
+                    }
+                }
+            } catch (NumberFormatException ignored) {
+                // 输入框为空或非数字时忽略
+            }
             this.minecraft.setScreen(this.parent);
         }).pos(centerX - 60, this.height - 40).width(120).build());
     }
@@ -98,14 +108,21 @@ public class FixWaterWheelConfigScreen extends Screen {
         this.renderBackground(guiGraphics);
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
 
+        int centerX = this.width / 2;
+        int yStart = this.height / 4;
+
         // 分区标题
-        int y = this.height / 4;
         guiGraphics.drawString(this.font,
                 "§e===== 客户端配置（仅本地渲染，不影响服务端） =====",
-                this.width / 2 - 160, y + 10, 0xFFFF55);
+                centerX - 160, yStart + 10, 0xFFFF55);
         guiGraphics.drawString(this.font,
                 "§a===== 服务端配置（影响水车实际行为） =====",
-                this.width / 2 - 160, y + 135, 0x55FF55);
+                centerX - 160, yStart + 104, 0x55FF55);
+
+        // 输入框上方的文字说明
+        guiGraphics.drawString(this.font,
+                "水车流体检查间隔（刻）:",
+                centerX - 100, yStart + 124 - 12, 0xFFFFFF);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
